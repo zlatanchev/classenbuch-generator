@@ -10,6 +10,7 @@ import pandas as pd
 import os
 import sys
 import threading
+import re
 from datetime import datetime
 
 # --- FIX ЗА .EXE ФАЙЛОВЕ (NOCONSOLE) ---
@@ -161,7 +162,7 @@ def parse_filiale_and_class(val_str):
     if any(w in s_lower for w in ['warteliste', 'abgemeldet', 'nan']):
         return "Неразпределени", s
 
-    known_filialen = ['Нойбиберг', 'Фрайхам']
+    known_filialen = ['Остпарк', 'Весткройц']
     found_filiale = "Основен"
     class_part = s
     
@@ -177,15 +178,45 @@ def parse_filiale_and_class(val_str):
     return found_filiale, class_part
 
 def get_template_filename(klasse_str):
-    k_lower = klasse_str.lower()
+    k_lower = str(klasse_str).lower().strip()
+    
+    # 1. Подготвителна група / Vorschule
     if any(w in k_lower for w in ['пуг', 'подготвителна', 'предшколна', 'vorschul', 'груп', 'подг']):
         return "dnevnik_potgotvitelna_grupa.docx"
-    if '1' in k_lower or 'първи' in k_lower:
-        return "dnevnik_I_klas.docx"
-    if any(c in k_lower for c in ['2', '3', '4', 'втори', 'трети', 'четвърти', 'ii', 'iii', 'iv']):
-        return "dnevnik_II_IV_klas.docx"
+        
+    # 2. Извънкласни дейности / Клубове
     if any(w in k_lower for w in ['клуб', 'школа', 'танц', 'извънкласн']):
         return "dnevnik_izvanklasni_deinosti.docx"
+
+    # 3. Числова проверка (1, 2, ..., 12)
+    num_match = re.search(r'\d+', k_lower)
+    if num_match:
+        grade = int(num_match.group())
+        if grade == 1:
+            return "dnevnik_I_klas.docx"
+        elif 2 <= grade <= 4:
+            return "dnevnik_II_IV_klas.docx"
+        elif 5 <= grade <= 12:
+            return "dnevnik_V_XII_klas.docx"
+
+    # 4. Текстова / Римска проверка за V - XII клас
+    if any(w in k_lower for w in ['пети', 'шести', 'седми', 'осми', 'девети', 'десети', 'единадесети', 'дванадесети']):
+        return "dnevnik_V_XII_klas.docx"
+    if re.search(r'(?:^|[^a-z0-9])(xii|xi|x|ix|viii|vii|vi|v)(?=[^a-z0-9]|$)', k_lower):
+        return "dnevnik_V_XII_klas.docx"
+
+    # 5. Текстова / Римска проверка за II - IV клас
+    if any(c in k_lower for c in ['втори', 'трети', 'четвърти']):
+        return "dnevnik_II_IV_klas.docx"
+    if re.search(r'(?:^|[^a-z0-9])(ii|iii|iv)(?=[^a-z0-9]|$)', k_lower):
+        return "dnevnik_II_IV_klas.docx"
+
+    # 6. Текстова / Римска проверка за I клас
+    if 'първи' in k_lower:
+        return "dnevnik_I_klas.docx"
+    if re.search(r'(?:^|[^a-z0-9])i(?=[^a-z0-9]|$)', k_lower):
+        return "dnevnik_I_klas.docx"
+
     return "dnevnik_V_XII_klas.docx"
 
 def set_cell_background(cell, fill_color):
